@@ -38,7 +38,7 @@ jobs:
           git zip unzip openjdk-17-jdk wget \
           autoconf libtool pkg-config \
           zlib1g-dev libncurses5-dev libncursesw5-dev \
-          libtinfo5 cmake libffi-dev libssl-dev
+          cmake libffi-dev libssl-dev
     
     - name: 🔧 Install Buildozer
       run: |
@@ -47,16 +47,11 @@ jobs:
     
     - name: ⚙️ Configure Buildozer
       run: |
-        # غیرفعال کردن هشدار root
         if grep -q "warn_on_root" buildozer.spec; then
           sed -i 's/warn_on_root = 1/warn_on_root = 0/g' buildozer.spec
         else
           echo "warn_on_root = 0" >> buildozer.spec
         fi
-        
-        # نمایش تنظیمات
-        echo "=== Buildozer Configuration ==="
-        cat buildozer.spec | grep -E "^(title|package|version|requirements)"
     
     - name: 🏗️ Build APK
       run: |
@@ -66,12 +61,11 @@ jobs:
       run: |
         echo "=== Build Directory ==="
         ls -lh bin/ || echo "No bin directory"
-        
         echo ""
         echo "=== APK Files ==="
         find . -name "*.apk" -type f
     
-    - name: 📤 Upload APK as artifact
+    - name: 📤 Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: VocabApp-v${{ github.run_number }}
