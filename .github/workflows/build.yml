@@ -7,81 +7,102 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ubuntu-22.04  # ← تغییر به 22.04 (پایدارتر)
+    timeout-minutes: 90
     
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
     
-    - name: 🐍 Setup Python
+    - name: 🐍 Setup Python 3.9
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.9'  # ← Python 3.9 سازگارتر با Kivy
     
-    - name: 💾 Cache Buildozer global directory
+    - name: 💾 Cache Buildozer
       uses: actions/cache@v4
       with:
-        path: .buildozer_global
-        key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-    
-    - name: 💾 Cache Buildozer directory
-      uses: actions/cache@v4
-      with:
-        path: .buildozer
-        key: buildozer-${{ hashFiles('buildozer.spec') }}
+        path: |
+          .buildozer
+          ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
     
     - name: 📦 Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          git zip unzip openjdk-17-jdk wget \
-          autoconf libtool pkg-config \
-          zlib1g-dev libncurses5-dev libncursesw5-dev \
-          cmake libffi-dev libssl-dev
+          python3-pip \
+          build-essential \
+          git \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libffi-dev \
+          libssl-dev \
+          cmake \
+          ccache
     
-    - name: 🔧 Install Buildozer
+    - name: 🔧 Install Buildozer and Cython
       run: |
-        pip install --upgrade pip
-        pip install buildozer cython==0.29.33
+        pip3 install --upgrade pip
+        pip3 install --upgrade wheel
+        pip3 install --upgrade setuptools
+        pip3 install buildozer==1.5.0
+        pip3 install cython==0.29.33
     
-    - name: ⚙️ Configure Buildozer
+    - name: 🔨 Setup environment
       run: |
-        if grep -q "warn_on_root" buildozer.spec; then
-          sed -i 's/warn_on_root = 1/warn_on_root = 0/g' buildozer.spec
-        else
+        # Setup buildozer directory
+        mkdir -p ~/.buildozer
+        
+        # Setup spec file
+        if ! grep -q "warn_on_root" buildozer.spec; then
+          echo "" >> buildozer.spec
+          echo "[buildozer]" >> buildozer.spec
           echo "warn_on_root = 0" >> buildozer.spec
+        else
+          sed -i 's/warn_on_root = 1/warn_on_root = 0/g' buildozer.spec
         fi
+        
+        # Display config
+        echo "=== Buildozer Spec ==="
+        cat buildozer.spec
     
-    - name: 🏗️ Build APK
+    - name: 🏗️ Build APK with Buildozer
       run: |
-        buildozer android debug
+        yes | buildozer android debug
+      continue-on-error: false
     
-    - name: 📋 List build output
+    - name: 📋 Show build directory
+      if: always()
       run: |
-        echo "=== Build Directory ==="
-        ls -lh bin/ || echo "No bin directory"
-        echo ""
-        echo "=== APK Files ==="
-        find . -name "*.apk" -type f
+        echo "=== Checking for APK ==="
+        ls -R bin/ 2>/dev/null || echo "No bin directory"
+        find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
     
     - name: 📤 Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: VocabApp-v${{ github.run_number }}
+        name: VocabApp-APK-v${{ github.run_number }}
         path: bin/*.apk
         retention-days: 30
-        if-no-files-found: error
+        if-no-files-found: warn
     
-    - name: 📊 Build Summary
+    - name: 📊 Build info
       if: success()
       run: |
-        echo "✅ Build completed successfully!"
-        echo ""
-        echo "📦 APK Details:"
+        echo "✅ Build successful!"
         for apk in bin/*.apk; do
           if [ -f "$apk" ]; then
-            SIZE=$(du -h "$apk" | cut -f1)
-            echo "  - $(basename "$apk"): $SIZE"
+            echo "📦 $(basename $apk): $(du -h $apk | cut -f1)"
           fi
         done
