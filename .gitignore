@@ -1,0 +1,13 @@
+# Buildozer / Android build output
+.buildozer/
+bin/
+
+# Local app data
+*.db
+audio_cache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

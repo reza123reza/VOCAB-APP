@@ -14,17 +14,17 @@ from kivy.metrics import dp
 from kivy.animation import Animation
 from kivy.properties import StringProperty, NumericProperty, BooleanProperty
 from kivy.clock import Clock
+import threading
 from datetime import datetime
 from database import Database
 from api_service import APIService
 
-# برای صدا
+# INTERNET یه دسترسی عادیه و از buildozer.spec (manifest) میاد؛ درخواست
+# runtime لازم نداره. دسترسی حافظه هم دیگه لازم نیست.
 try:
-    from android.permissions import request_permissions, Permission
-    request_permissions([Permission.INTERNET, Permission.WRITE_EXTERNAL_STORAGE, 
-                        Permission.READ_EXTERNAL_STORAGE, Permission.WAKE_LOCK])
+    import android  # noqa: F401
     ANDROID = True
-except:
+except ImportError:
     ANDROID = False
 
 
@@ -568,8 +568,17 @@ class PracticeScreen(MDScreen):
         self.example1_label.text = "Loading examples..."
         self.example2_label.text = ""
         
-        # Get from API
+        # Get from API در پس‌زمینه تا UI موقع انتظار برای اینترنت هنگ نکنه
+        threading.Thread(target=self._fetch_word_details, args=(word,), daemon=True).start()
+    
+    def _fetch_word_details(self, word):
         data = self.api.get_word_details(word)
+        Clock.schedule_once(lambda dt: self._show_word_details(word, data))
+    
+    def _show_word_details(self, word, data):
+        # اگه کاربر تا رسیدن جواب رفته سراغ کلمه‌ی بعدی، این جواب قدیمیه
+        if not self.current_word or self.current_word['english'] != word:
+            return
         
         if data:
             self.phonetic_label.text = f"/{data.get('phonetic', '')}/".replace("//", "")
@@ -609,10 +618,18 @@ class PracticeScreen(MDScreen):
             self.play_count += 1
             self.play_count_label.text = f"🔊 {self.play_count}"
             
-            # پخش صدا
-            success = self.api.play_audio(self.current_word['english'])
-            if not success:
-                self.show_toast("⚠️ Could not play audio")
+            # دانلود صدا در پس‌زمینه، پخش روی thread اصلی
+            word = self.current_word['english']
+            
+            def worker():
+                path = self.api.download_audio(word)
+                Clock.schedule_once(lambda dt: self._play_file(path))
+            
+            threading.Thread(target=worker, daemon=True).start()
+    
+    def _play_file(self, path):
+        if not self.api.play_file(path):
+            self.show_toast("⚠️ Could not play audio")
     
     def show_toast(self, text):
         from kivymd.toast import toast
@@ -782,7 +799,7 @@ class WordsListScreen(MDScreen):
                 ),
                 text=f"[b]{word['english']}[/b]",
                 secondary_text=word['persian'],
-                tertiary_text=f"Reviewed: {word.get('last_review', 'Never')}",
+                tertiary_text=f"Reviewed: {word.get('last_review') or 'Never'}",
                 on_release=lambda x, w=word: self.play_word_audio(w['english'])
             )
             
@@ -815,14 +832,18 @@ class WordsListScreen(MDScreen):
                 ),
                 text=f"[b]{word['english']}[/b]",
                 secondary_text=word['persian'],
-                tertiary_text=f"Reviewed: {word.get('last_review', 'Never')}"
+                tertiary_text=f"Reviewed: {word.get('last_review') or 'Never'}"
             )
             
             self.words_list.add_widget(item)
     
     def play_word_audio(self, word):
         """پخش صدای کلمه از لیست"""
-        self.api.play_audio(word)
+        def worker():
+            path = self.api.download_audio(word)
+            Clock.schedule_once(lambda dt: self.api.play_file(path))
+        
+        threading.Thread(target=worker, daemon=True).start()
     
     def go_back(self):
         self.manager.transition.direction = 'right'

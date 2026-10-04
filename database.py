@@ -1,10 +1,36 @@
+import os
+import shutil
 import sqlite3
-from datetime import datetime, timedelta
-import json
+from datetime import datetime
+
+DB_NAME = 'vocabulary.db'
+
+
+def default_db_path():
+    """
+    مسیر دیتابیس توی پوشه‌ی داده‌ی اپ (App.user_data_dir).
+    روی اندروید پوشه‌ی کاری اپ با هر آپدیت پاک می‌شه، پس دیتابیس اونجا
+    نباید باشه. اگه از نسخه‌ی قبلی یه vocabulary.db توی پوشه‌ی کاری مونده،
+    یک بار به مسیر جدید کپی می‌شه تا کلمه‌ها و پیشرفت کاربر از دست نره.
+    """
+    try:
+        from kivy.app import App
+        app = App.get_running_app()
+    except Exception:
+        app = None
+    if app is None:
+        return DB_NAME
+
+    os.makedirs(app.user_data_dir, exist_ok=True)
+    path = os.path.join(app.user_data_dir, DB_NAME)
+    if not os.path.exists(path) and os.path.exists(DB_NAME):
+        shutil.copy2(DB_NAME, path)
+    return path
+
 
 class Database:
-    def __init__(self):
-        self.conn = sqlite3.connect('vocabulary.db')
+    def __init__(self, db_path=None):
+        self.conn = sqlite3.connect(db_path or default_db_path())
         self.cursor = self.conn.cursor()
         self.create_tables()
         self.load_initial_words()
