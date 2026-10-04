@@ -21,6 +21,12 @@ jobs:
       with:
         python-version: '3.9'  # ← Python 3.9 سازگارتر با Kivy
     
+    - name: ☕ Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'   # Gradle/AGP of python-for-android needs Java 17 (runner default is 11)
+
     - name: 💾 Cache Buildozer
       uses: actions/cache@v4
       with:
