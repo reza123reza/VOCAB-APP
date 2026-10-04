@@ -28,7 +28,7 @@
 ## 🚀 اجرا روی کامپیوتر
 
 ```bash
-pip install "kivy==2.1.0" "kivymd==1.1.1" certifi
+pip install "kivy==2.3.0" "kivymd==1.2.0" certifi
 python main.py
 ```
 
